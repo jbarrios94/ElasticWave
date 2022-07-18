@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import time
 
 c0 = 2.5                                               # velocity (km/sec) (shear wave)
-eps = 1                                              # stability limit
+eps = 0.45                                            # stability limit
 b = 1 / (0.31 * (1e3*c0)**0.25)
 rho0 = 1/b                                             # density (kg/m**3)
 # rho0 = 2500                                             
@@ -20,8 +20,8 @@ k0 = rho0*c0**2.                                       # Bulk modulus (K)
 
 # Initialization of setup
 # --------------------------------------------------------------------------
-nx  = 401
-nz  = 401                                              # number of grid points 
+nx  = 201
+nz  = 201                                              # number of grid points 
 Z0  = rho0*c0                                          # impedance
 isx = round(nx/2)
 isz = round(nz/2)                                      # source location
@@ -33,8 +33,9 @@ dx = xmax / (nx - 1)                                   # calculate x-space incre
 dz = zmax / (nz - 1)                                   # calculate z-space increment (m)
 x  = (np.arange(nx)*dx)                                # initialize space coordinates 
 z  = (np.arange(nz)*dz)
-dt = eps * np.maximum(dx, dz)/(np.sqrt(14)*np.max(c0))               # calculate time step from stability criterion(s)
-nt = round(tmax/dt)                                   
+dt = eps * np.minimum(dx, dz)/(np.max(c0))              # calculate time step from stability criterion(s)
+# dt = eps * np.maximum(dx, dz)/(np.max(c0))
+nt = round(tmax/dt)                                 
 
 # Source time function
 # T0 = 1. / f0                                           # period
