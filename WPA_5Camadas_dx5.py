@@ -42,14 +42,14 @@ def Dominio(LimInfx, LimSupx, LimInfy, LimSupy, NumVolx, NumVoly):
     #LimInf es el limite inferior
     #LimSup es el limite superior
     #NumVol es el numero de volumenes (celdas)
-    dx = (LimSupx - LimInfx)/NumVolx
-    dy = (LimSupy - LimInfy)/NumVoly
-    xc = np.linspace(LimInfx - 2*dx, LimSupx + 2*dx, NumVolx + 5)
-    xc = (xc[:-1] + xc[1:])/2.
-    yc = np.linspace(LimInfy - 2*dx, LimSupy + 2*dx, NumVoly + 5)
-    yc = (yc[:-1] + yc[1:])/2.
-    xn = np.linspace(LimInfx, LimSupx, NumVolx + 1)
-    yn = np.linspace(LimInfy, LimSupy, NumVoly + 1)
+    dx = (LimSupx - LimInfx)/(NumVolx - 1)
+    dy = (LimSupy - LimInfy)/(NumVoly - 1)
+    xn = np.linspace(LimInfx, LimSupx + dx, NumVolx + 1)
+    yn = np.linspace(LimInfy, LimSupy + dy, NumVoly + 1)
+    xc = np.zeros(NumVolx + 4)
+    yc = np.zeros(NumVoly + 4)
+    xc[2:-2] = xn[:-1]
+    yc[2:-2] = yn[:-1]
     Xc, Yc = np.meshgrid(xc,yc)
     Xn, Yn = np.meshgrid(xn, yn)
     return Xc, Yc, Xn, Yn, dx, dy
@@ -243,34 +243,36 @@ def Fimm2D(s, W1, W2, L, axe):
             F[:,:,j] = Fimm1D(s[:,j], W1[:,:,j], W2[:,:,j], L)
     return F
 
-def Fimm2D1(s, W1, W2, L, axe):
+def Fimm2Dx(s, W1, W2):
     dim = np.shape(W1)
-    if axe == 1:
-        F = np.zeros((dim[0], dim[1],dim[2] - 2))
-        norm = np.sum(W1[:,:,1:-1]**2,0)
-        norm += (norm == 0. ) * 1.
-        theta = np.sum(W1[:,:,2:]*W1[:,:,1:-1],0)/norm
-        W1L = Limitador2D(theta, L)*W1[:,:,1:-1]
-        norm = np.sum(W2[:,:,1:-1]**2,0)
-        norm += (norm == 0 ) * 1.
-        theta = np.sum(W2[:,:,0:-2]*W2[:,:,1:-1],0)/norm
-        W2L = Limitador2D(theta, L)*W2[:,:,1:-1]
-        F[:,...] = ((np.sign(-s[:,1:-2])*(1.-dt/dx*np.abs(-s[:,1:-2]))*W1L) +
-            (np.sign(s[:,2:-1])*(1.-dt/dx*np.abs(s[:,2:-1]))*W2L))
-        F = F * 0.5
-    elif axe == 2:
-        F = np.zeros((dim[0], dim[1] - 2,dim[2]))
-        norm = np.sum(W1[:,1:-1,:]**2,0)
-        norm += (norm == 0. ) * 1.
-        theta = np.sum(W1[:,2:,:]*W1[:,1:-1,:],0)/norm
-        W1L = Limitador2D(theta, L)*W1[:,1:-1,:]
-        norm = np.sum(W2[:,1:-1,:]**2,0)
-        norm += (norm == 0 ) * 1.
-        theta = np.sum(W2[:,0:-2,:]*W2[:,1:-1,:],0)/norm
-        W2L = Limitador2D(theta, L)*W2[:,1:-1,:]
-        F[:,...] = ((np.sign(-s[1:-2,:])*(1.-dt/dx*np.abs(-s[1:-2,:]))*W1L) +
-            (np.sign(s[2:-1,:])*(1.-dt/dx*np.abs(s[2:-1,:]))*W2L))
-        F = F * 0.5
+    F = np.zeros((dim[0], dim[1],dim[2] - 2))
+    norm = np.sum(W1[:,:,1:-1]**2,0)
+    norm += (norm == 0. ) * 1.
+    theta = np.sum(W1[:,:,2:]*W1[:,:,1:-1],0)/norm
+    W1L = SuperBee(theta)*W1[:,:,1:-1]
+    norm = np.sum(W2[:,:,1:-1]**2,0)
+    norm += (norm == 0 ) * 1.
+    theta = np.sum(W2[:,:,0:-2]*W2[:,:,1:-1],0)/norm
+    W2L = SuperBee(theta)*W2[:,:,1:-1]
+    F[:,...] = ((np.sign(-s[:,1:-2])*(1.-dt/dx*np.abs(-s[:,1:-2]))*W1L) +
+        (np.sign(s[:,2:-1])*(1.-dt/dx*np.abs(s[:,2:-1]))*W2L))
+    F = F * 0.5
+    return F
+
+def Fimm2Dy(s, W1, W2):
+    dim = np.shape(W1)
+    F = np.zeros((dim[0], dim[1] - 2,dim[2]))
+    norm = np.sum(W1[:,1:-1,:]**2,0)
+    norm += (norm == 0. ) * 1.
+    theta = np.sum(W1[:,2:,:]*W1[:,1:-1,:],0)/norm
+    W1L = SuperBee(theta)*W1[:,1:-1,:]
+    norm = np.sum(W2[:,1:-1,:]**2,0)
+    norm += (norm == 0 ) * 1.
+    theta = np.sum(W2[:,0:-2,:]*W2[:,1:-1,:],0)/norm
+    W2L = SuperBee(theta)*W2[:,1:-1,:]
+    F[:,...] = ((np.sign(-s[1:-2,:])*(1.-dt/dx*np.abs(-s[1:-2,:]))*W1L) +
+        (np.sign(s[2:-1,:])*(1.-dt/dx*np.abs(s[2:-1,:]))*W2L))
+    F = F * 0.5
     return F
 
 def Limitador1D(theta, o):
@@ -299,31 +301,22 @@ def Limitador1D(theta, o):
         phy = np.max([a,c],0)
         return phy
     
-def Limitador2D(theta, o):
+def SuperBee(theta):
     shape = np.shape(theta)
-    if o == 0:
-        phy = 0.
-        return phy
-    if o == 1:
-        phy = 1.
-        return phy
-    if o == 2:
-        theta1 = np.array([np.ones(shape), theta])
-        phy = MinMod(theta1)
-        return phy
-    if o == 3:
-        a = np.zeros(shape)
-        b = np.ones(shape)
-        c = np.min([b , 2.*theta],0)
-        d = np.min([2.*b, theta],0)
-        phy = np.max([a,c,d],0)
-        return phy
-    if o == 4:
-        a = np.zeros(shape)
-        b = np.ones(shape)
-        c = np.min([(b + theta)/2. , 2.*theta, 2*b],0)
-        phy = np.max([a,c],0)
-        return phy
+    a = np.zeros(shape)
+    b = np.ones(shape)
+    c = np.min([b , 2.*theta],0)
+    d = np.min([2.*b, theta],0)
+    phy = np.max([a,c,d],0)
+    return phy
+
+def MC(theta):
+    shape = np.shape(theta)
+    a = np.zeros(shape)
+    b = np.ones(shape)
+    c = np.min([(b + theta)/2. , 2.*theta, 2*b],0)
+    phy = np.max([a,c],0)
+    return phy
 
 def MaxMod(a):
     k1 = a > 0.
@@ -422,9 +415,9 @@ Lim = 1 #Limitador que sera usado para la reconstruccion
 #-----------------------------------------------------------------------------
 rho_a = 1; rho_b = 1. #Densidad
 k_a = 1; k_b = 1.  #Bulk modulus
-Lim_Infx = 0; Lim_Supx = 1000; NumVolx = 200
-Lim_Infy = 0; Lim_Supy = 1000; NumVoly = 200
-t_inicial = 0; t_final = 150
+Lim_Infx = 0; Lim_Supx = 1000; NumVolx = 101
+Lim_Infy = 0; Lim_Supy = 1000; NumVoly = 101
+t_inicial = 0; t_final = 250
 ricker = True
 CFL = 1. #Condicion CFL para el calculo del paso de tiempo
 Dimensional_Splitting = True; DS_ordem = 1
@@ -436,16 +429,16 @@ Xc, Yc, Xn, Yn, dx, dy = Dominio(Lim_Infx, Lim_Supx, Lim_Infy, Lim_Supy, NumVolx
 # c = velocidades(Rho, K) #Velocidades, son dadas al resolver el problema de riemann
 #Ricker-----------------------------------------------------------------------
 #Homogeneo--------------------------------------------------------------------
-c = np.ones(np.shape(Xc))*2.5
-Rho = np.ones(np.shape(Xc))
-K = c**2 * Rho
+# c = np.ones(np.shape(Xc))*2.5
+# Rho = np.ones(np.shape(Xc))
+# K = c**2 * Rho
 #-----------------------------------------------------------------------------
 #Ricker-----------------------------------------------------------------------
-#heterogeneo--------------------------------------------------------------------
+# heterogeneo--------------------------------------------------------------------
 # nlayers = 5
 # cp_top = 1.5
 # cp_bottom = 3.5
-# c = np.empty((NumVolx + 4, NumVoly + 4))
+c = np.ones((NumVolx + 4, NumVoly + 4)) * 1.5
 # c[:] = cp_top  # Top velocity (background)
 # cp_i = np.linspace(cp_top, cp_bottom, nlayers)
 # for i in range(1, nlayers):
@@ -459,15 +452,15 @@ K = c**2 * Rho
 # c[:,1] = c[:,2]; c[:,-2] = c[:,-3]
 
 
-# b = 1 / (0.31 * (1e3*c)**0.25)
-# b[c < 1.51] = 1.0
-# Rho = 1/b
-# K = c**2 * Rho
+b = 1 / (0.31 * (1e3*c)**0.25)
+b[c < 1.51] = 1.0
+Rho = 1/b
+K = c**2 * Rho
 soluciones = []
 #-----------------------------------------------------------------------------
 VelMax = np.max(c) #Velocidad maxima para el calculo del CFL
 dt = (dx * CFL)/VelMax #Tamaño del paso del tiempo
-# dt = 0.0024999999999998357
+# dt = 1.6999999999999602
 # dt = 0.00125
 q = Condicion_Inicial(Xc, Yc, Xn, Yn, NumVolx, NumVoly) #Calculo de la condicion inicial
 q = BCx(q, Ibc, 0)
@@ -493,34 +486,35 @@ isx = round(NumVolx/2)
 isy = round(NumVoly/2)
 
 time_values = np.arange(Nt)*dt
-t0 = 1./0.015
+f0  = 0.015
+t0 = 1./f0
 a = 1.
-r = (np.pi * 0.015 * (time_values - t0))
+r = (np.pi * f0 * (time_values - t0))
 src = a * (1-2.*r**2)*np.exp(-r**2)
+
 
 F = np.zeros((3,NumVoly+4,NumVolx+3))
 G = np.zeros((3,NumVoly+3,NumVolx+4))
-
 inicio = time.time()
 
 if Dimensional_Splitting:
     if DS_ordem == 1:
         for i in range(Nt):
-            t_inicial += dt
+            # t_inicial += dt
             # print(t_inicial)
             W1, W3 = Riemann_Elasticity_2Dx(q, Rho, K, c)
             qb[:,:,2:-2] = qb[:,:,2:-2] - dt/dx * (W3[:,:,1:-2] + W1[:,:,2:-1])
-            F[:,:,1:-1] = Fimm2D1(c, W1, W3, Lim, 1)
+            F[:,:,1:-1] = Fimm2Dx(c, W1, W3)
             qb[:,:,2:-2] = qb[:,:,2:-2] - dt/dx * (F[:,:,2:-1] - F[:,:,1:-2])
             # qb = BCx(qb, Ibc, 0)
             # qb = BCx(qb, Dbc, 1)
             W1, W3 = Riemann_Elasticity_2Dy(qb, Rho, K, c)
             qb[:,2:-2,:] = qb[:,2:-2,:] - dt/dy * (W3[:,1:-2,:] + W1[:,2:-1,:])
-            G[:,1:-1,:] = Fimm2D1(c, W1, W3, Lim, 2)
+            G[:,1:-1,:] = Fimm2Dy(c, W1, W3)
             qb[:,2:-2,:] = qb[:,2:-2,:] - dt/dy * (G[:,2:-1,:] - G[:,1:-2,:])
             # qb[:,2:-2:,2:-2] = Ricker(qb[:,2:-2:,2:-2], dt, t_inicial, isx, isz)
             # qb[:,2:-2:,2:-2] = Ricker(qb[:,2:-2:,2:-2], dt, t_inicial, Xc[2:-2,2:-2], Yc[2:-2, 2:-2])
-            qb[0, isy, isx] = qb[0, isy, isx] + dt * src[i]
+            qb[0, isy, isx] = qb[0, isy, isx] + dt * src[i]/K[isy, isx]
             # receiver[i, :] = q[0,3,2:-2]
             # receiver1[i, :] = q[1,3,2:-2]
             # receiver2[i, :] = q[2,3,2:-2]
@@ -586,49 +580,50 @@ if Dimensional_Splitting:
             q = np.copy(qb)
 else:
     for i in range(Nt):
-        if i%(Nt//10) == 0:
-            np.save("FWPA_Stress_t"+str(round(t_inicial))+".npy",(q[0]*K)[2:-2,2:-2])
-            # np.save("Vx1\FWPA_Vx_t"+str(round(t_inicial))+".npy",(q[1]/(Rho))[2:-2,2:-2])
-            # np.save("Vz1\FWPA_Vz_t"+str(round(t_inicial))+".npy",(q[2]/(Rho))[2:-2,2:-2])
-            # np.save("Receiver1\FWPA_Rec_t" + str(round(t_inicial)) + ".npy",receiver)
-        t_inicial += dt
+        # if i%(Nt//10) == 0:
+        #     np.save("FWPA_Stress_t"+str(round(t_inicial))+".npy",(q[0]*K)[2:-2,2:-2])
+        #     # np.save("Vx1\FWPA_Vx_t"+str(round(t_inicial))+".npy",(q[1]/(Rho))[2:-2,2:-2])
+        #     # np.save("Vz1\FWPA_Vz_t"+str(round(t_inicial))+".npy",(q[2]/(Rho))[2:-2,2:-2])
+        #     # np.save("Receiver1\FWPA_Rec_t" + str(round(t_inicial)) + ".npy",receiver)
+        # t_inicial += dt
         # print(t_inicial)
         F = np.zeros((3,NumVoly+4,NumVolx+3))
         G = np.zeros((3,NumVoly+3,NumVolx+4))
-        W1x, W3x, Am, Ap = Riemann_Elasticity_2Dx(q, Rho, K, c)
-        F[:,:,1:-1] = F[:,:,1:-1] + Fimm2D(c, W1x, W3x, Lim, 1)
-        BpAp, BmAp, BpAm, BmAm = Transvese_Riemann_Elasticity_2Dx(q, Rho, K, Ap, Am, c)
+        W1x, W3x = Riemann_Elasticity_2Dx(q, Rho, K, c)
+        F[:,:,1:-1] = F[:,:,1:-1] + Fimm2Dx(c, W1x, W3x)
+        BpAp, BmAp, BpAm, BmAm = Transvese_Riemann_Elasticity_2Dx(q, Rho, K, W3x, W1x, c)
         G[:,:-1,1:] = G[:,:-1,1:] - dt/(2.*dx)*BmAp
         G[:,1:,1:] = G[:,1:,1:] - dt/(2.*dx)*BpAp
         G[:,:-1,:-1] = G[:,:-1,:-1] - dt/(2.*dx)*BmAm
         G[:,1:,:-1] = G[:,1:,:-1] - dt/(2.*dx)*BpAm
         
-        W1y, W3y, Bm, Bp = Riemann_Elasticity_2Dy(q, Rho, K, c)
-        G[:,1:-1,:] = G[:,1:-1,:] + Fimm2D(c, W1y, W3y, Lim, 2)
-        ApBp, AmBp, ApBm, AmBm = Transvese_Riemann_Elasticity_2Dy(q, Rho, K, Bp, Bm, c)
+        W1y, W3y = Riemann_Elasticity_2Dy(q, Rho, K, c)
+        G[:,1:-1,:] = G[:,1:-1,:] + Fimm2Dy(c, W1y, W3y)
+        ApBp, AmBp, ApBm, AmBm = Transvese_Riemann_Elasticity_2Dy(q, Rho, K, W3y, W1y, c)
         F[:,1:,:-1] = F[:,1:,:-1] - dt/(2.*dy)*AmBp
         F[:,1:,1:] = F[:,1:,1:] - dt/(2.*dy)*ApBp
         F[:,:-1,:-1] = F[:,:-1,:-1] - dt/(2.*dy)*AmBm
         F[:,:-1,1:] = F[:,:-1,1:] - dt/(2.*dy)*ApBm
         
         
-        qb[:,2:-2:,2:-2] = qb[:,2:-2,2:-2] - dt/dx * (Ap[:,2:-2,1:-2] + Am[:,2:-2,2:-1])\
-            - dt/dy * (Bp[:,1:-2,2:-2] + Bm[:,2:-1,2:-2])\
+        qb[:,2:-2:,2:-2] = qb[:,2:-2,2:-2] - dt/dx * (W3x[:,2:-2,1:-2] + W1x[:,2:-2,2:-1])\
+            - dt/dy * (W3y[:,1:-2,2:-2] + W1y[:,2:-1,2:-2])\
                 - dt/dx * (F[:,2:-2,2:-1] - F[:,2:-2,1:-2])\
                     - dt/dy * (G[:,2:-1,2:-2] - G[:,1:-2,2:-2])\
                         
         # desx = euler(desx, (q[1]/(Rho))[2:-2,2:-2], dt)
         # desy = euler(desy, (q[2]/(Rho))[2:-2,2:-2], dt)
                         
-                        
-        qb[:,2:-2:,2:-2] = Ricker(qb[:,2:-2:,2:-2], dt, t_inicial, Xc[2:-2,2:-2], Yc[2:-2, 2:-2])
-        receiver[i, :] = q[0,3,2:-2]
-        qb = BCx(qb, Ibc, 0)
-        qb = BCx(qb, Dbc, 1)
-        qb = BCy(qb, Arbc, 1)
-        qb = BCy(qb, Abbc, 0)
+        qb[0, isy, isx] = qb[0, isy, isx] + dt * src[i]                
+        # qb[:,2:-2:,2:-2] = Ricker(qb[:,2:-2:,2:-2], dt, t_inicial, Xc[2:-2,2:-2], Yc[2:-2, 2:-2])
+        # receiver[i, :] = q[0,3,2:-2]
+        # qb = BCx(qb, Ibc, 0)
+        # qb = BCx(qb, Dbc, 1)
+        # qb = BCy(qb, Arbc, 1)
+        # qb = BCy(qb, Abbc, 0)
         #----------------------------------------------------------------------
         q = np.copy(qb)
+        
 fin = time.time()
 print (fin - inicio)
 # np.save("Tiempo.txt" + str(dx),fin - inicio)
@@ -684,8 +679,9 @@ print (fin - inicio)
 #------------------------------------------------------------------------------
 # Plot Stress-------------------------------------------------------------------
 # scale = .5*1e-4
-# plt.figure(figsize = (15, 15))
-plt.imshow((q[0]*K)[2:-2,2:-2], cmap = 'seismic')
+# plt.figure(figsize = (8, 8))
+plt.imshow((q[0]*K)[2:-2,2:-2], cmap = 'seismic', extent = [0, Lim_Supx, Lim_Supy, 0])
+plt.tight_layout()
 # plt.figure(figsize = (15, 15))
 # plt.imshow(v_x, cmap = 'RdGy', vmin = -scale, vmax = scale)
 # plt.figure(figsize = (15, 15))
