@@ -6,6 +6,8 @@ Created on Wed Apr 28 12:09:35 2021
 """
 
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import time
 
@@ -310,6 +312,48 @@ def SuperBee(theta):
     phy = np.max([a,c,d],0)
     return phy
 
+
+def Ultrabee(theta, cfl):
+    shape = np.shape(theta)
+    ccfl = np.ones(shape) * cfl
+    a = np.ones(shape) * 0.001
+    b = np.ones(shape) * 0.999
+    c = np.ones(shape)
+    cfmod1 = np.max([a, ccfl], 0)
+    cfmod2 = np.min([b, ccfl], 0)
+    a = 2 * theta/cfmod1
+    T1 = np.min([c, a], 0)
+    b = 2/(1 - cfmod2)
+    T2 = np.min([theta, b], 0)
+    return np.max([np.zeros(shape), T1, T2], 0)
+    
+
+def cfl_superbee(r,cfl):
+    r"""
+    CFL-Superbee (Roe's Ultrabee) without theta parameter
+    """
+
+    a = np.empty((2,len(r)))
+    b = np.zeros((3,len(r)))
+    
+    a[0,:] = 0.001
+    a[1,:] = cfl
+    cfmod1 = np.max(a[0],a[1])
+    print(a.shape)
+    print(cfmod1.shape)
+    print(r.shape)
+    a[0,:] = 0.999
+    cfmod2 = np.min([a[0],a[1]], 1)
+    
+    a[0,:] = 1.0
+    a[1,:] = 2.0 * r / cfmod1
+    b[1,:] = np.min([a[0],a[1]], 0)
+    a[0,:] = 2.0/(1-cfmod2)
+    a[1,:] = r
+    b[2,:] = np.min([a[0],a[1]], 0)
+    
+    return np.max(b,axis=0)
+
 def MC(theta):
     shape = np.shape(theta)
     a = np.zeros(shape)
@@ -392,6 +436,8 @@ def euler(des, vel, dt):
     des1 = des + dt * vel
     return des1
 
+
+
 Ibc = 2 #tipo de condicion de frontera a la izquierda
 Dbc = 2 #tipo de condicion de frontera a la derecha
 Arbc = 2 #tipo de condicion de frontera a la derecha
@@ -401,7 +447,7 @@ Abbc = 2 #tipo de condicion de frontera a la derecha
   2 condicion de frontera absorvente (zero-extrapolacion)
   3 condicion de rontera de pared solida (reflectivas)
 """
-Lim = 1 #Limitador que sera usado para la reconstruccion
+Lim = 3 #Limitador que sera usado para la reconstruccion
 """ enumeracion
     0 primera orden (hace el termino de correccion F = 0)
     1 Metodo Lax-Wendroff
@@ -419,7 +465,7 @@ Lim_Infx = 0; Lim_Supx = 1000; NumVolx = 101
 Lim_Infy = 0; Lim_Supy = 1000; NumVoly = 101
 t_inicial = 0; t_final = 250
 ricker = True
-CFL = 1. #Condicion CFL para el calculo del paso de tiempo
+CFL = 0.45 #Condicion CFL para el calculo del paso de tiempo
 Dimensional_Splitting = True; DS_ordem = 1
 0
 #-----------------------------------------------------------------------------
@@ -495,10 +541,10 @@ src = a * (1-2.*r**2)*np.exp(-r**2)
 
 F = np.zeros((3,NumVoly+4,NumVolx+3))
 G = np.zeros((3,NumVoly+3,NumVolx+4))
-inicio = time.time()
 
 if Dimensional_Splitting:
     if DS_ordem == 1:
+        inicio = time.time()
         for i in range(Nt):
             # t_inicial += dt
             # print(t_inicial)
@@ -534,6 +580,7 @@ if Dimensional_Splitting:
             # qb = BCy(qb, Arbc, 0)
             # qb = BCy(qb, Abbc, 1)
             q = np.copy(qb)
+        fin = time.time()
     else:
         for i in range(Nt):
             # print(t_inicial)
@@ -624,7 +671,7 @@ else:
         #----------------------------------------------------------------------
         q = np.copy(qb)
         
-fin = time.time()
+
 print (fin - inicio)
 # np.save("Tiempo.txt" + str(dx),fin - inicio)
 # np.save("FWPA_Stress_t"+str(round(t_inicial))+".npy",(q[0]*K)[2:-2,2:-2])
@@ -682,6 +729,11 @@ print (fin - inicio)
 # plt.figure(figsize = (8, 8))
 plt.imshow((q[0]*K)[2:-2,2:-2], cmap = 'seismic', extent = [0, Lim_Supx, Lim_Supy, 0])
 plt.tight_layout()
+plt.savefig("prueba3.png")
+
+plt.figure()
+plt.plot((q[0]*K)[NumVoly//2,2:-2], Xn[0,:-1])
+plt.savefig("prueba4.png")
 # plt.figure(figsize = (15, 15))
 # plt.imshow(v_x, cmap = 'RdGy', vmin = -scale, vmax = scale)
 # plt.figure(figsize = (15, 15))
