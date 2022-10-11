@@ -9,6 +9,8 @@ import numpy as np
 from devito import *
 from examples.seismic.source import RickerSource, Receiver, TimeAxis
 from examples.seismic import plot_image, demo_model, Model
+import Graficar as gf
+import matplotlib.pyplot as plt
 
 #==============================================================================
 # Latex Configuration
@@ -17,22 +19,28 @@ from examples.seismic import plot_image, demo_model, Model
 #==============================================================================
 # Setup Configuration
 #==============================================================================
-c = np.load("seg_cut_ref.npy")
+# c = np.load("/hom:e/juan/ElasticWave/Teste_seg_eage/seg_teste5_dx20.npy")
 # c = c[::2**3, ::2**3]
-print(c.shape)
+
+# print(c.shape)
 so = 8
-nptx = c.shape[0]
-nptz = c.shape[1]
+# nptx = c.shape[0]
+# nptz = c.shape[1]
+nptx = 350 * 2**0 + 1
+nptz = 210 * 2**0 + 1
+c = np.ones((nptx, nptz)) * 1.5
 x0 = 3000
 x1 = 10000
 compx = (x1 - x0)
 hxv = (x1 - x0)/(nptx - 1)
+print(hxv)
 z0 = 0
 z1 = 4200
 compz = (z1 - z0)
 hzv = (z1 - z0)/(nptz - 1)
+print(hzv)
 t0 = 0
-tn = 1200
+tn = 1500
 f0 = 0.005
 nrec = nptx
 nbl = 0
@@ -68,6 +76,7 @@ l2m = model.vp **2 * ro
 # Time Construction
 #==============================================================================
 dt0        = model.critical_dt
+print(dt0)
 time_range = TimeAxis(start=t0, stop=tn, step=dt0)
 nt         = time_range.num - 1
 n_salidas  = int(tn/200) + 1
@@ -79,7 +88,7 @@ jump       = nt//(n_salidas - 1)
 #==============================================================================
 src                     = RickerSource(name='src',grid=model.grid,f0=f0,time_range=time_range)
 xsource                 = 0.5 * (x1 + x0)
-zsource                 = 40.
+zsource                 = 1400
 src.coordinates.data[:] = [xsource,zsource]
 # #==============================================================================
 
@@ -93,7 +102,7 @@ v = VectorTimeFunction(name='v', grid = model.grid, space_order = so, time_order
 #==============================================================================
 # Source Term Construction
 #==============================================================================
-src_p = src.inject(field = p.forward, expr = s * src/(hxv * hzv))
+src_p = src.inject(field = p.forward, expr = s * src/ (hxv * hzv))
 #==============================================================================
 
 #==============================================================================
@@ -101,15 +110,15 @@ src_p = src.inject(field = p.forward, expr = s * src/(hxv * hzv))
 #==============================================================================
 rec                       = Receiver(name="rec",grid=model.grid,npoint=nrec,time_range=time_range)
 rec.coordinates.data[:,0] = np.linspace(x0,x1,num=nrec)
-rec.coordinates.data[:,1] = 40.
+rec.coordinates.data[:,1] = 1400
 rec_term                  = rec.interpolate(expr=p)
 #==============================================================================
 
 #==============================================================================
 # Symbolic Equation Construction
 #==============================================================================
-u_v = Eq(v.forward, v + s/ro * grad(p))
-u_p = Eq(p.forward, p + s * l2m * div(v.forward))
+u_p = Eq(p.forward, p - s * l2m * div(v))
+u_v = Eq(v.forward, v - s/ro * grad(p.forward))
 #==============================================================================
 
 #==============================================================================
@@ -120,7 +129,7 @@ Pg    = np.zeros((n_salidas,nptx,nptz))
 
 #==============================================================================
 # Operator Definition
-op2 = Operator([u_v, u_p] + src_p + rec_term + [Eq(psave,p)], subs=model.grid.spacing_map) 
+op2 = Operator([u_p, u_v] + src_p + rec_term + [Eq(psave,p)], subs=model.grid.spacing_map) 
 # op2 = Operator([u_v, u_p] + src_p + rec_term)
 
 #==============================================================================
@@ -130,7 +139,11 @@ op2(dt=dt0, time=nt)
 #==============================================================================
 
 # ==============================================================================
-for i in range(1,n_salidas):
-    np.save('p_devito_ref_t' + str(int(i*200)) +'_Test5.npy',psave.data[i])
-np.save('rec_devito_ref_t' + str(tn) + '_Test5.npy',rec.data)
+# for i in range(1,n_salidas):
+#     np.save('p_devito_so8_t' + str(int(i*200)) +'_Test5.npy',psave.data[i])
+# np.save('rec_devito_so8_t' + str(tn) + '_Test5.npy',rec.data)
 # ==============================================================================
+gf.plot_image(p.data[0].T, extent = [x0, x1, z1, z0])
+gf.plot_seismic_traces([p.data[0, 180, :]], 0, 1500)
+print(np.max(p.data[0, 180, :]))
+plt.show()
